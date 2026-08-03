@@ -1,6 +1,6 @@
 # Panasonic KX-MB1500 Network Bridge
 
-Turn a USB-only Panasonic KX-MB1500/KX-MB1500RU multifunction device into a modern network printer and scanner.
+Turn a USB-only Panasonic KX-MB1500 multifunction device into a modern network printer and scanner.
 
 ## What it provides
 
@@ -27,7 +27,7 @@ panamfs-scan-1.3.1-x86_64.tar.tar
 Pass the complete USB device to the VM by Vendor/Product ID:
 
 ```text
-04da:0f0b Panasonic KX-MB1500RU
+04da:0f0b Panasonic KX-MB1500
 ```
 
 In Proxmox: VM → Hardware → Add → USB Device → Use USB Vendor/Device ID.
@@ -41,7 +41,7 @@ lsusb | grep 04da:0f0b
 ## Installation
 
 ```bash
-git clone YOUR_REPOSITORY_URL
+git clone https://github.com/iShAlexei/panasonic_mfp_bridge.git
 cd panasonic-mfp-bridge
 chmod +x install.sh uninstall.sh scripts/*.sh
 sudo ./install.sh \
