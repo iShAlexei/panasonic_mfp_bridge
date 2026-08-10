@@ -54,7 +54,7 @@ else
   bad "saned cannot access Panasonic scanner"
 fi
 
-if systemctl list-unit-files 2>/dev/null | grep -q '^airsaned\.service'; then
+if systemctl cat airsaned.service >/dev/null 2>&1; then
   systemctl is-active --quiet airsaned && ok "AirSane active" || bad "AirSane installed but inactive"
   if avahi-browse -rt _uscan._tcp 2>/dev/null | grep -qi Panasonic; then
     ok "AirSane publishes _uscan._tcp"
