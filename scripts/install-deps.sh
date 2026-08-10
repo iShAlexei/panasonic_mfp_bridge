@@ -18,4 +18,9 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
 systemctl enable --now cups avahi-daemon
 wait_for_cups || die "CUPS did not become ready."
 
+if systemctl list-unit-files cups-browsed.service >/dev/null 2>&1; then
+  log "Disabling cups-browsed to prevent automatic implicitclass printer queues..."
+  systemctl disable --now cups-browsed.service || true
+fi
+
 success "System dependencies installed."
