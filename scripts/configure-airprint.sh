@@ -29,15 +29,35 @@ wait_for_cups || die "CUPS is not ready after AirPrint configuration."
 
 sleep 3
 
-log "DNS-SD records published by CUPS:"
-avahi-browse -rt _ipp._tcp 2>/dev/null | grep -A3 -B1 -F "$QUEUE" || true
-avahi-browse -rt _ipps._tcp 2>/dev/null | grep -A3 -B1 -F "$QUEUE" || true
+log "Reading DNS-SD records published by CUPS..."
 
-# Both _ipp._tcp and _ipps._tcp are valid CUPS publications.
-# macOS may prefer _ipps._tcp; do not replace it with a hand-written record.
-if avahi-browse -rt _ipp._tcp 2>/dev/null | grep -Fq "$QUEUE" ||
-   avahi-browse -rt _ipps._tcp 2>/dev/null | grep -Fq "$QUEUE"; then
-  success "CUPS is publishing $QUEUE through DNS-SD/Bonjour."
+IPP_RECORDS="$(avahi-browse -rt _ipp._tcp 2>/dev/null || true)"
+IPPS_RECORDS="$(avahi-browse -rt _ipps._tcp 2>/dev/null || true)"
+
+printf '%s\n' "$IPP_RECORDS"
+printf '%s\n' "$IPPS_RECORDS"
+
+IPP_FOUND=0
+IPPS_FOUND=0
+
+if grep -Fq "rp=printers/${QUEUE}" <<<"$IPP_RECORDS"; then
+    IPP_FOUND=1
+fi
+
+if grep -Fq "rp=printers/${QUEUE}" <<<"$IPPS_RECORDS"; then
+    IPPS_FOUND=1
+fi
+
+if (( IPP_FOUND || IPPS_FOUND )); then
+    success "CUPS is publishing $QUEUE through DNS-SD/Bonjour."
+
+    if (( IPP_FOUND )); then
+        success "_ipp._tcp advertisement found"
+    fi
+
+    if (( IPPS_FOUND )); then
+        success "_ipps._tcp advertisement found"
+    fi
 else
-  die "No CUPS DNS-SD record found for $QUEUE."
+    die "No CUPS DNS-SD record found for $QUEUE."
 fi
