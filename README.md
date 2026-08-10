@@ -1,121 +1,111 @@
-# Panasonic KX-MB1500 Network Bridge
+# Panasonic KX-MB1500 MFP Bridge
 
-Turn a USB-only Panasonic KX-MB1500 multifunction device into a modern network printer and scanner.
+Turn a USB-only Panasonic KX-MB1500/KX-MB1500RU into a network printer and
+scanner using Ubuntu Server 24.04 x86_64.
 
-## What it provides
+## Architecture
 
-- CUPS printing through the official Panasonic GDI filter
-- IPP/AirPrint discovery through CUPS + Avahi
-- SANE scanning through the official Panasonic `panamfs` backend
-- eSCL/AirScan scanning through AirSane
-- Tested architecture: Proxmox VM, Ubuntu Server 24.04 LTS, x86_64
-- Clients: macOS and Windows printing/scanning; iPhone/iPad printing
+Printing:
 
-## Important
+`macOS / Windows -> CUPS DNS-SD (IPP/IPPS) -> Panasonic GDI filter -> USB`
 
-Panasonic driver files are proprietary and are **not included**. Download the official x86_64 Linux printer and scanner driver archives yourself.
+Scanning:
 
-Expected archives:
+`macOS / Windows -> eSCL/AirScan -> AirSane -> SANE panamfs -> USB`
 
-```text
-mccgdi-2.0.10-x86_64.tar.tar
-panamfs-scan-1.3.1-x86_64.tar.tar
-```
+The project intentionally **does not** create a custom Avahi printer service.
+CUPS publishes the real queue itself, including its UUID and capabilities.
 
-## Proxmox USB passthrough
+## Requirements
 
-Pass the complete USB device to the VM by Vendor/Product ID:
+- Ubuntu Server 24.04 x86_64
+- Panasonic KX-MB1500 visible inside the VM as USB `04da:0f0b`
+- Official Panasonic Linux printer archive:
+  `mccgdi-2.0.10-x86_64...`
+- Official Panasonic Linux scanner archive:
+  `panamfs-scan-1.3.1-x86_64...`
 
-```text
-04da:0f0b Panasonic KX-MB1500
-```
+The Panasonic archives are proprietary and are not included.
 
-In Proxmox: VM → Hardware → Add → USB Device → Use USB Vendor/Device ID.
-
-Inside Ubuntu, verify:
+## Install
 
 ```bash
-lsusb | grep 04da:0f0b
-```
-
-## Installation
-
-```bash
-git clone https://github.com/iShAlexei/panasonic_mfp_bridge.git
-cd panasonic-mfp-bridge
 chmod +x install.sh uninstall.sh scripts/*.sh
+
 sudo ./install.sh \
   --printer-driver ~/drivers/mccgdi-2.0.10-x86_64.tar.tar \
   --scanner-driver ~/drivers/panamfs-scan-1.3.1-x86_64.tar.tar
 ```
 
-The installer will:
+The installer deliberately tests **local printing before enabling network
+sharing**. If the Panasonic GDI filter fails, the installer stops there.
 
-1. Install Ubuntu dependencies.
-2. Extract only the required Panasonic printer files.
-3. Add the Ghostscript compatibility symlink required by the old GDI filter.
-4. Create the CUPS queue and configure A4/automatic scaling.
-5. Install the Panasonic SANE backend.
-6. Add a persistent udev rule for scanner access.
-7. Build and install AirSane.
-8. Enable CUPS, Avahi and AirSane services.
+## Important macOS note
 
-## Diagnostics
+A discovered CUPS queue can legitimately appear as:
 
-```bash
-sudo ./scripts/doctor.sh
+```text
+dnssd://..._ipps._tcp.local./?uuid=...
 ```
 
-Manual checks:
+Do not treat `_ipps._tcp` as an error and do not replace the CUPS record with a
+hand-written `_ipp._tcp` Avahi service.
+
+## Manual checks
 
 ```bash
-lpstat -t
-sudo -u saned scanimage -L
-systemctl status cups avahi-daemon airsaned
+sudo ./scripts/test-printer.sh Panasonic_KX_MB1500
+sudo ./scripts/test-scanner.sh
+sudo ./scripts/doctor.sh Panasonic_KX_MB1500
+```
+
+Printer discovery:
+
+```bash
 avahi-browse -rt _ipp._tcp
+avahi-browse -rt _ipps._tcp
+```
+
+Scanner discovery:
+
+```bash
 avahi-browse -rt _uscan._tcp
 ```
 
-AirSane web interface:
+## Known compatibility fixes
+
+### Panasonic GDI / Ghostscript
+
+The legacy filter searches old fixed locations for `libgs.so`. The installer
+creates:
 
 ```text
-http://SERVER_IP:8090/
+/usr/local/lib/libgs.so -> current Ubuntu libgs.so
 ```
 
-## Client setup
+### Panasonic scanner / libusb
 
-### macOS
+The `panamfs` backend needs the legacy ABI package:
 
-The printer should appear automatically as AirPrint. The scanner should appear in Image Capture.
+```text
+libusb-0.1-4
+```
 
-### Windows
+The scanner is exposed to the `saned` service user through a udev rule for
+USB ID `04da:0f0b`.
 
-Add the printer as an IPP/network printer. The scanner should appear in Windows Scan on current Windows 10/11 systems.
+## AirSane
 
-### iPhone/iPad
-
-AirPrint works for printing. The built-in “Scan Documents” command uses the camera, not a network scanner. Third-party eSCL app compatibility varies.
-
-## Why the compatibility fixes are needed
-
-The official printer filter searches for `libgs.so` in legacy paths such as `/usr/local/lib`. Ubuntu 24.04 stores Ghostscript in a multiarch directory. The installer creates a compatibility symlink.
-
-The official scanner backend uses the legacy `libusb-0.1.so.4` ABI. Ubuntu 24.04 still provides it in the `libusb-0.1-4` compatibility package.
-
-## Uninstall
+AirSane is built from the upstream Git repository. You may select a ref:
 
 ```bash
-sudo ./uninstall.sh
+sudo ./install.sh ... --airsane-ref <tag-or-commit>
 ```
 
-The script removes files and queues installed by this project. It intentionally leaves the compiled AirSane installation in place to avoid removing files that may be used by other scanners.
+For a reproducible public release, pin this to a tested AirSane tag/commit
+after clean-VM validation.
 
-## Security notes
+## Status
 
-- CUPS and AirSane are intended for a trusted home LAN.
-- AirSane does not provide authentication or encrypted transport.
-- Do not expose ports 631 or 8090 directly to the public internet.
-
-## License
-
-The scripts and documentation in this repository are MIT licensed. Panasonic drivers remain subject to Panasonic's own license and are not redistributed here. AirSane is a separate GPL-licensed project.
+This is a clean-install release candidate. Test it on a disposable VM/snapshot
+before publishing it as a stable release.

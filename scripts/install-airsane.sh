@@ -1,21 +1,42 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
-require_root
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/common.sh"
 
-if command -v airsaned >/dev/null 2>&1; then
-  log "AirSane is already installed; ensuring service is enabled."
+REF="${AIRSANE_REF:-master}"
+SRC="/usr/local/src/AirSane"
+BUILD="/usr/local/src/AirSane-build"
+
+require_root
+require_commands git cmake make scanimage systemctl
+
+sudo -u saned scanimage -L 2>/dev/null | grep -Fq 'Panasonic KX-MB1500' ||
+  die "AirSane will run as saned, but saned cannot access the scanner."
+
+install -d -m 0755 /usr/local/src
+
+if [[ -d "$SRC/.git" ]]; then
+  log "Refreshing existing AirSane source..."
+  git -C "$SRC" fetch --tags --prune
 else
-  SRC=/usr/local/src/AirSane
-  BUILD=/usr/local/src/AirSane-build
-  rm -rf "$SRC" "$BUILD"
-  git clone --depth 1 https://github.com/SimulPiscator/AirSane.git "$SRC"
-  cmake -S "$SRC" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release
-  cmake --build "$BUILD"
-  cmake --install "$BUILD"
+  rm -rf "$SRC"
+  git clone https://github.com/SimulPiscator/AirSane.git "$SRC"
 fi
+
+git -C "$SRC" checkout "$REF"
+if [[ "$REF" == "master" || "$REF" == "main" ]]; then
+  git -C "$SRC" pull --ff-only || true
+fi
+
+rm -rf "$BUILD"
+cmake -S "$SRC" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release
+cmake --build "$BUILD" --parallel
+cmake --install "$BUILD"
+
 systemctl daemon-reload
 systemctl enable --now airsaned
-systemctl restart airsaned
-log "AirSane enabled. Web UI default: http://SERVER_IP:8090/"
+sleep 3
+systemctl is-active --quiet airsaned ||
+  die "airsaned failed to start. Check: journalctl -u airsaned -n 100"
+
+success "AirSane installed and running."
