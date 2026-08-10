@@ -98,8 +98,17 @@ printf '\n'
 "$ROOT_DIR/scripts/doctor.sh" "$QUEUE" || true
 
 success "Installation sequence completed."
-printf '\nIMPORTANT:\n'
-printf '  - Confirm that the local CUPS test page physically printed correctly.\n'
-printf '  - On macOS add the printer discovered by Bonjour/AirPrint.\n'
-printf '  - A CUPS-generated _ipps._tcp URI with ?uuid=... is VALID and expected.\n'
-printf '  - Do not create a manual Avahi printer .service file.\n'
+
+printf '\n'
+printf '============================================================\n'
+printf ' IMPORTANT: A SYSTEM REBOOT IS REQUIRED\n'
+printf '============================================================\n'
+printf '\n'
+printf 'Before adding/testing the printer from macOS or Windows run:\n'
+printf '\n'
+printf '    sudo reboot\n'
+printf '\n'
+printf 'After reboot, add the printer through Bonjour/AirPrint.\n'
+printf 'Do not create a custom Avahi printer service.\n'
+printf 'A CUPS-generated _ipps._tcp URI with ?uuid=... is valid.\n'
+printf '\n'
