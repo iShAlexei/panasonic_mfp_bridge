@@ -65,6 +65,7 @@ else
   meh "AirSane is not installed"
 fi
 
+printf '\nmacOS note: verify that the client queue is GDI-AirPrint/AirPrint, not Generic PostScript Printer.\n'
 printf '\nFailures: %d\nWarnings: %d\n' "$FAIL" "$WARN"
 (( FAIL == 0 )) || exit 1
 (( WARN == 0 )) || exit 2

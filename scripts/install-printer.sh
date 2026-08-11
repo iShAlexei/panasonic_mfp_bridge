@@ -75,13 +75,12 @@ lpadmin -d "$QUEUE"
 cupsaccept "$QUEUE"
 cupsenable "$QUEUE"
 
-# These are the settings that fixed macOS/iOS scaling during the working setup.
+# Keep the server queue on A4. macOS scaling is determined by using the
+# AirPrint client queue; do not add PostScript normalization wrappers here.
 lpadmin -p "$QUEUE" \
   -o media-default=A4 \
   -o PageSize=A4 \
-  -o PageRegion=A4 \
-  -o print-scaling-default=auto-fit \
-  -o fit-to-page-default=true
+  -o PageRegion=A4
 
 printf '%s\n' "$QUEUE" >"$STATE_DIR/queue-name"
 printf '%s\n' "$DEVICE_URI" >"$STATE_DIR/printer-device-uri"

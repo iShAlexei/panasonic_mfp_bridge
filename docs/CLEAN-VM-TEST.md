@@ -39,3 +39,10 @@ Then test, in this order:
 
 Record the exact macOS `lpstat -v` URI. A CUPS-generated `_ipps._tcp` URI
 containing `?uuid=...` is expected and valid.
+
+## macOS queue verification
+
+When testing macOS, verify the installed client queue type. The successful
+baseline is `Panasonic KX-MB1500series GDI-AirPrint` (or an AirPrint queue), not
+`Generic PostScript Printer`. If System Settings creates the Generic PostScript
+queue, remove it and add the discovered printer from Preview -> File -> Print.

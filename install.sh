@@ -248,37 +248,79 @@ download_one_driver() {
   local url="${1:?url required}"
   local output="${2:?output required}"
   local description="${3:?description required}"
+  local part="${output}.part"
+  local total=""
+  local chunk_size=16384
+  local start end expected got
 
   if [[ -s "$output" ]]; then
     local cached_members
     cached_members="$(tar -tf "$output" 2>/dev/null || true)"
-
     if grep -Eq '(^|/)install-driver$' <<<"$cached_members"; then
       success "$description already cached: $output"
       return 0
     fi
   fi
 
-  rm -f -- "${output}.part"
-
+  rm -f -- "$part" "${part}.chunk"
   log "Downloading $description from Panasonic..."
 
-  curl \
-    --fail \
-    --location \
-    --show-error \
-    --progress-bar \
-    --connect-timeout 20 \
-    --retry 3 \
-    --retry-delay 2 \
-    --output "${output}.part" \
-    "$url" ||
-      die "Failed to download $description."
+  # First try an ordinary transfer. Some networks/CDN paths stall after the
+  # first ~16 KiB; keep it time-bounded so we can fall back automatically.
+  if curl -4 --http1.1 \
+      --fail --location --show-error --progress-bar \
+      --connect-timeout 20 --speed-time 20 --speed-limit 1024 \
+      --retry 2 --retry-delay 2 \
+      --output "$part" "$url"; then
+    if tar -tf "$part" >/dev/null 2>&1; then
+      mv -f -- "$part" "$output"
+      validate_driver_archive "$output" "$description"
+      success "Downloaded $description."
+      return 0
+    fi
+  fi
 
-  mv -f -- "${output}.part" "$output"
+  warn "Normal download stalled or was incomplete; trying HTTP Range fallback (16 KiB chunks)."
+  rm -f -- "$part"
 
+  total="$(curl -4 --http1.1 --fail --location --silent --show-error --head "$url" \
+    | tr -d '\r' | awk 'tolower($1)=="content-length:" {n=$2} END {print n}')"
+  [[ "$total" =~ ^[0-9]+$ && "$total" -gt 0 ]] ||
+    die "Could not determine $description size for HTTP Range fallback."
+
+  : > "$part"
+  start=0
+  while (( start < total )); do
+    end=$((start + chunk_size - 1))
+    (( end >= total )) && end=$((total - 1))
+    expected=$((end - start + 1))
+
+    rm -f -- "${part}.chunk"
+    curl -4 --http1.1 \
+      --fail --location --silent --show-error \
+      --connect-timeout 20 --max-time 60 \
+      --retry 4 --retry-delay 1 \
+      --range "${start}-${end}" \
+      --output "${part}.chunk" "$url" ||
+        die "HTTP Range download failed for bytes ${start}-${end} of $description."
+
+    got="$(stat -c '%s' "${part}.chunk")"
+    [[ "$got" -eq "$expected" ]] ||
+      die "HTTP Range returned $got bytes; expected $expected for bytes ${start}-${end}."
+
+    cat "${part}.chunk" >> "$part"
+    printf '\r  %s: %d/%d bytes (%d%%)' "$description" "$((end + 1))" "$total" "$(((end + 1) * 100 / total))" >&2
+    start=$((end + 1))
+  done
+  printf '\n' >&2
+  rm -f -- "${part}.chunk"
+
+  [[ "$(stat -c '%s' "$part")" -eq "$total" ]] ||
+    die "HTTP Range fallback produced an unexpected file size for $description."
+
+  mv -f -- "$part" "$output"
   validate_driver_archive "$output" "$description"
-  success "Downloaded $description."
+  success "$description downloaded successfully using HTTP Range fallback."
 }
 
 download_panasonic_drivers() {
