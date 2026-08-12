@@ -415,9 +415,17 @@ log "Stage 2/6: Panasonic printer driver and local CUPS queue"
 "$ROOT_DIR/scripts/install-printer.sh" "$PRINTER" "$QUEUE"
 
 log "Stage 3/6: local print smoke test"
+
 "$ROOT_DIR/scripts/test-printer.sh" "$QUEUE" || {
   die "Local printing test failed. Network printer sharing was NOT configured."
 }
+
+log "Waiting for CUPS to settle after local print test..."
+
+sleep 2
+
+wait_for_cups ||
+  die "CUPS did not become ready after local print test."
 
 if (( DO_AIRPRINT )); then
   log "Stage 4/6: standard CUPS DNS-SD/AirPrint sharing"
