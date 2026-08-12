@@ -17,11 +17,31 @@ cupsctl --share-printers
 
 wait_for_cups || die "CUPS did not recover after enabling sharing."
 
-lpadmin -p "$QUEUE" \
-  -o printer-is-shared=true \
-  -o printer-op-policy=default \
-  -o auth-info-required=none \
-  -u allow:all
+retry_lpadmin() {
+  local attempt
+  local max_attempts=10
+  local delay=2
+
+  for ((attempt=1; attempt<=max_attempts; attempt++)); do
+    if lpadmin "$@"; then
+      return 0
+    fi
+
+    if (( attempt == max_attempts )); then
+      return 1
+    fi
+
+    warn "CUPS temporarily unavailable; lpadmin retry $attempt/$max_attempts in ${delay}s..."
+    sleep "$delay"
+  done
+
+  return 1
+}
+
+retry_lpadmin \
+  -p "$QUEUE" \
+  -o printer-is-shared=true ||
+    die "Failed to enable CUPS printer sharing after multiple attempts."
 
 systemctl restart cups
 systemctl restart avahi-daemon
